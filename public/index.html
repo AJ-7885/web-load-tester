@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Load &amp; Performance Tester</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1>Web Load &amp; Performance Tester</h1>
+        <p class="tagline">Concurrent HTTP load testing for sites you own — live latency &amp; throughput.</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="notice" role="note">
+    <strong>Authorized use only.</strong> Test only servers you own or have explicit written permission to test.
+    Hammering third-party sites can be abusive and may be illegal.
+  </div>
+
+  <main class="layout">
+    <!-- Configuration panel -->
+    <section class="panel config" aria-label="Test configuration">
+      <h2>Configuration</h2>
+
+      <label class="field">
+        <span>Target URL</span>
+        <input id="url" type="url" placeholder="http://localhost:3000/" autocomplete="off" />
+      </label>
+
+      <div class="row">
+        <label class="field">
+          <span>Method</span>
+          <select id="method">
+            <option>GET</option>
+            <option>HEAD</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>DELETE</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Concurrency</span>
+          <input id="concurrency" type="number" min="1" max="5000" value="10" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <span>Duration (sec, 0 = until stopped)</span>
+          <input id="durationSec" type="number" min="0" max="86400" value="15" />
+        </label>
+        <label class="field">
+          <span>Max requests (0 = unlimited)</span>
+          <input id="maxRequests" type="number" min="0" value="0" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <span>Think time (ms/req)</span>
+          <input id="thinkTimeMs" type="number" min="0" value="0" />
+        </label>
+        <label class="field">
+          <span>Timeout (ms)</span>
+          <input id="timeoutMs" type="number" min="100" value="10000" />
+        </label>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced (headers, body, TLS)</summary>
+        <label class="field">
+          <span>Headers (one per line: <code>Name: Value</code>)</span>
+          <textarea id="headers" rows="3" placeholder="Authorization: Bearer ...&#10;X-Test: 1"></textarea>
+        </label>
+        <label class="field">
+          <span>Request body (POST/PUT/PATCH)</span>
+          <textarea id="body" rows="3" placeholder='{"hello":"world"}'></textarea>
+        </label>
+        <div class="checks">
+          <label class="check"><input id="followRedirects" type="checkbox" checked /> Follow redirects</label>
+          <label class="check"><input id="insecure" type="checkbox" /> Allow insecure TLS (self-signed)</label>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button id="startBtn" class="btn primary">Start test</button>
+        <button id="stopBtn" class="btn danger" disabled>Stop</button>
+      </div>
+      <p id="formError" class="form-error" role="alert"></p>
+    </section>
+
+    <!-- Live results -->
+    <section class="panel results" aria-label="Live results">
+      <div class="results-head">
+        <h2>Live results</h2>
+        <span id="statusPill" class="pill idle">Idle</span>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress"><div id="progressBar" class="progress-inner"></div></div>
+        <span id="progressLabel" class="progress-label">—</span>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat"><span class="stat-label">Completed</span><span id="stCompleted" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">In flight</span><span id="stInflight" class="stat-value">0</span></div>
+        <div class="stat ok"><span class="stat-label">OK (2xx/3xx)</span><span id="stOk" class="stat-value">0</span></div>
+        <div class="stat bad"><span class="stat-label">Failed</span><span id="stFailed" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Req/s (now)</span><span id="stRps" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Req/s (avg)</span><span id="stAvgRps" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">Data received</span><span id="stBytes" class="stat-value">0 B</span></div>
+        <div class="stat"><span class="stat-label">Elapsed</span><span id="stElapsed" class="stat-value">0.0s</span></div>
+      </div>
+
+      <div class="latency-row">
+        <h3>Latency <small>(ms, recent window)</small></h3>
+        <div class="lat-grid">
+          <div><span>min</span><b id="latMin">0</b></div>
+          <div><span>mean</span><b id="latMean">0</b></div>
+          <div><span>p50</span><b id="latP50">0</b></div>
+          <div><span>p95</span><b id="latP95">0</b></div>
+          <div><span>TTFB</span><b id="latTtfb">0</b></div>
+        </div>
+      </div>
+
+      <div class="charts">
+        <figure>
+          <figcaption>Throughput (req/s)</figcaption>
+          <canvas id="rpsChart" width="520" height="120"></canvas>
+        </figure>
+        <figure>
+          <figcaption>Latency p95 (ms)</figcaption>
+          <canvas id="latChart" width="520" height="120"></canvas>
+        </figure>
+      </div>
+
+      <div class="dist">
+        <div class="dist-col">
+          <h3>Status codes</h3>
+          <ul id="statusList" class="dist-list"><li class="muted">No data yet</li></ul>
+        </div>
+        <div class="dist-col">
+          <h3>Errors</h3>
+          <ul id="errorList" class="dist-list"><li class="muted">None</li></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Runs locally on your machine · Node backend, no external services · Open source.
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
